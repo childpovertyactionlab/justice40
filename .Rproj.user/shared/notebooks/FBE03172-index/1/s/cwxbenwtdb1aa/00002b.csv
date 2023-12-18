@@ -1,0 +1,25 @@
+"0","leaflet(data = df) %>%
+  addProviderTiles(""CartoDB.Positron"") %>%
+  addPolygons(fillColor = ~colorQuantile(colorRamp(c(""#faf4de"", ""#7a6002""), interpolate = ""spline""), PM25, n = 5)(PM25),
+              fillOpacity = 0.7, weight = 1,
+              color = ""white"", dashArray = ""3"",
+              label = ~paste(""PM2.5 level:"", round(PM25, digits = 3), ""µg/m³""),
+              labelOptions = labelOptions(direction = 'auto', html = TRUE)
+  ) %>%
+  addLegend(""bottomright"", pal = colorQuantile(colorRamp(c(""#faf4de"", ""#7a6002""), interpolate = ""spline""), df$PM25, n = 5),
+            values = ~PM25,
+            title = ""Quartile"",
+            opacity = 1) %>%
+  addPolygons(
+    data = dallas,
+    fillColor = ""#333333"",
+    fillOpacity = 0.1, weight = 2, color = ""#333333"",
+    smoothFactor = 1,
+    options = pathOptions(clickable = F, interactive = F)
+  ) %>%
+  setMaxBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+"
+"2","Warning: sf layer has inconsistent datum (+proj=longlat +datum=NAD83 +no_defs).
+Need '+proj=longlat +datum=WGS84'"
+"2","Warning: sf layer has inconsistent datum (+proj=longlat +datum=NAD83 +no_defs).
+Need '+proj=longlat +datum=WGS84'"

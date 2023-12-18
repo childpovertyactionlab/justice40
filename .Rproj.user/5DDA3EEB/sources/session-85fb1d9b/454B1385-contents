@@ -1,0 +1,321 @@
+---
+title: "Justice40 in Dallas County"
+format: html
+---
+
+```{r setup, output = F, echo = F}
+
+library(tidycensus)
+library(raster)
+library(rasterVis)
+library(ncdf4)
+library(lattice)
+library(sf)
+require(tidyverse)
+library(leaflet)
+
+# acs_vars <- load_variables(2022, "acs5")
+
+# acs_prof <- load_variables(2022, "acs5/profile")
+
+# acs_sums <- load_variables(2022, "acs5/subject")
+
+compare <- read_delim("tab20_tract20_tract10_natl.txt", delim = "|")
+
+# Poverty 100% vol: S1701_C02_001 / S1701_C01_001
+
+# Child poverty 100% vol: (B17020_003 + B17020_004 + B17020_005) / 
+
+# Life expectancy:
+  # see below
+
+# Heat deserts?
+  # see below
+
+# Air pollution?
+
+dallas_co <- get_acs("county",
+                     variables = "S1701_C02_001",
+                     year = 2022,
+                     state = "TX",
+                     county = "Dallas",
+                     geometry = TRUE)
+
+
+dallas <- get_acs("place",
+                  variables = "S1701_C02_001",
+                  year = 2022,
+                  state = "TX",
+                  geometry = TRUE) %>%
+  filter(GEOID == "4819000") %>%
+  sf::st_intersection(dallas_co)
+
+
+acs <- get_acs("tract",
+               variables = c("S1701_C02_001", "S1701_C01_001", 
+                             "S1701_C02_002", "S1701_C01_002"),
+               year = 2022,
+               state = "TX",
+               county = "Dallas",
+               geometry = TRUE) %>%
+  dplyr::select(-moe) %>%
+  pivot_wider(
+    names_from = "variable",
+    values_from = "estimate"
+  ) %>%
+  mutate(
+    "poverty" = S1701_C02_001 / S1701_C01_001,
+    "child_pov" = S1701_C02_002 / S1701_C01_002
+    )
+
+read_life_exp <- read_csv("cdc_life_expectancy.csv") %>%
+  filter(State == "Texas") %>%
+  filter(County == "Dallas County, TX")
+
+
+# LIFE EXP (2010-2015) FROM 2010 TRACTS MAPPED TO 2020 TRACTS USING AREA-WEIGHTED MEAN
+
+life_exp <- compare %>%
+  filter(GEOID_TRACT_20 %in% acs$GEOID) %>%
+  mutate(
+    `Census Tract Number` =  sprintf("%07.2f", as.numeric(str_remove(NAMELSAD_TRACT_10, "^Census Tract ")))
+  ) %>%
+  left_join(read_life_exp, by = "Census Tract Number") %>%
+  group_by(GEOID_TRACT_20) %>%
+  summarize(
+    life_exp = weighted.mean(`Life Expectancy`, AREALAND_PART, na.rm = TRUE)
+  ) %>%
+  rename(GEOID = GEOID_TRACT_20)
+
+
+
+heat <- readxl::read_excel("urban_heat.xlsx", sheet = 2) %>%
+  rename(heat_effect_F = `urban heat island effect (temperature in degrees F)`) %>%
+  mutate(GEOID = as.character(`census tract number`)) %>%
+  dplyr::select(GEOID, heat_effect_F)
+
+
+# pollution PM2.5 for 2018
+
+ncfile <- ncdf4::nc_open('V4NA03_PM25_NA_201801_201812-RH35.nc')
+input_nc <- 'V4NA03_PM25_NA_201801_201812-RH35.nc'
+varname <- 'PM25'
+
+# nc2raster <- raster(input_nc,varname = varname,band = 1)
+nc2raster <- stack(input_nc, varname = varname)
+
+merge <- acs %>%
+  dplyr::select(-c("S1701_C02_001", "S1701_C01_001", "S1701_C02_002", "S1701_C01_002")) %>%
+  left_join(life_exp) %>%
+  left_join(heat)
+
+centroids <- merge %>%
+  sf::st_centroid() %>%
+  sf::st_transform(centroids, crs = crs(nc2raster)) %>%
+  mutate(PM25 = as.vector(raster::extract(nc2raster, .))) %>%
+  as.data.frame() %>%
+  dplyr::select(GEOID, PM25)
+
+df <- merge %>%
+  left_join(centroids, by = "GEOID") %>%
+mutate(
+    poverty_score = ifelse(is.na(poverty), 0, ntile(poverty, 5)),
+    child_pov_score = ifelse(is.na(child_pov), 0, ntile(child_pov, 5)),
+    life_exp_score = ifelse(is.na(life_exp), 0, 6 - ntile(life_exp, 5)),
+    heat_effect_F_score = ifelse(is.na(heat_effect_F), 0, 6 - ntile(heat_effect_F, 5)),
+    PM25_score = ifelse(is.na(PM25), 0, ntile(PM25, 5))
+  ) %>%
+  rowwise() %>% 
+  mutate(
+    data_count = 5 - ((is.na(poverty)) + 
+            (is.na(child_pov)) + 
+            (is.na(heat_effect_F)) + 
+            (is.na(life_exp)) + 
+            (is.na(PM25))),
+    total_score = poverty_score + child_pov_score + heat_effect_F_score + life_exp_score + PM25_score,
+    avg_score = (poverty_score + child_pov_score + heat_effect_F_score + life_exp_score + PM25_score) / data_count
+  ) %>% 
+  ungroup() %>%
+  mutate(tract = str_split(NAME, ";", simplify = TRUE)[, 1])
+
+
+# ggplot(df, aes(x = poverty, y = life_exp)) +
+#   geom_point() +  # Scatter plot
+#   geom_smooth(method = "lm", se = FALSE) +  # Linear regression line
+#   labs(
+#     title = "Scatter Plot of Poverty vs. Life Expectancy",
+#     x = "Poverty",
+#     y = "Life Expectancy"
+#   ) +
+#   theme_minimal()
+
+bounds <- as.vector(sf::st_bbox(dallas_co))
+
+```
+
+## Severity Score
+
+Calculated by averaging quintile placement across all metrics. Higher score is worse.
+
+```{r avg_score}
+
+leaflet(data = df) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(fillColor = ~colorNumeric(colorRamp(c("#fff5fb", "#d1007d"), interpolate = "spline"), c(1,5))(avg_score),
+              fillOpacity = 0.7, weight = 1,
+              color = "white", dashArray = "3",
+              label = ~paste0("Severity: ", total_score, " out of ", data_count * 5),
+              labelOptions = labelOptions(direction = 'auto', html = TRUE)) %>%
+  addLegend("bottomright", pal = colorNumeric(colorRamp(c("#fff5fb", "#d1007d"), interpolate = "spline"), c(1,5)),
+            values = ~avg_score,
+            title = "Average Score",
+            opacity = 1) %>%
+  addPolygons(
+    data = dallas,
+    fillColor = "#333333",
+    fillOpacity = 0.1, weight = 2, color = "#333333",
+    smoothFactor = 1,
+    options = pathOptions(clickable = F, interactive = F)
+  ) %>%
+  setMaxBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+
+```
+
+## Poverty Rate (2018-2022)
+
+```{r poverty}
+
+leaflet(data = df) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(fillColor = ~colorQuantile(colorRamp(c("#e6eefa", "#02214f"), interpolate = "spline"), poverty, n = 5)(poverty),
+              fillOpacity = 0.7, weight = 1,
+              color = "white", dashArray = "3",
+              label = ~paste0("Poverty rate: ", scales::percent(poverty, accuracy = 0.1)),
+              labelOptions = labelOptions(direction = 'auto', html = TRUE)) %>%
+  addLegend("bottomright", pal = colorQuantile(colorRamp(c("#e6eefa", "#02214f"), interpolate = "spline"), df$poverty, n = 5),
+            values = ~poverty,
+            title = "Quartile",
+            opacity = 1) %>%
+  addPolygons(
+    data = dallas,
+    fillColor = "#333333",
+    fillOpacity = 0.1, weight = 2, color = "#333333",
+    smoothFactor = 1,
+    options = pathOptions(clickable = F, interactive = F)
+  ) %>%
+  setMaxBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+
+```
+
+## Child Poverty Rate (2018-2022)
+
+```{r child_pov}
+
+leaflet(data = df) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(fillColor = ~colorQuantile(colorRamp(c("#e6eefa", "#0457d1"), interpolate = "spline"), child_pov, n = 5)(child_pov),
+              fillOpacity = 0.7, weight = 1,
+              color = "white", dashArray = "3",
+              label = ~paste0("Child poverty rate: ", scales::percent(child_pov, accuracy = 0.1)),
+              labelOptions = labelOptions(direction = 'auto', html = TRUE)) %>%
+  addLegend("bottomright", pal = colorQuantile(colorRamp(c("#e6eefa", "#0457d1"), interpolate = "spline"), df$child_pov, n = 5),
+            values = ~child_pov,
+            title = "Quartile",
+            opacity = 1) %>%
+  addPolygons(
+    data = dallas,
+    fillColor = "#333333",
+    fillOpacity = 0.1, weight = 2, color = "#333333",
+    smoothFactor = 1,
+    options = pathOptions(clickable = F, interactive = F)
+  ) %>%
+  setMaxBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+
+```
+
+## Life Expectancy (2010-2015)
+
+```{r life_exp}
+
+leaflet(data = df) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(fillColor = ~colorQuantile(colorRamp(c("#d5f5dc", "#04801f"), interpolate = "spline"), life_exp, n = 5)(life_exp),
+              fillOpacity = 0.7, weight = 1,
+              color = "white", dashArray = "3",
+              label = ~paste0("Life expectancy: ", round(life_exp, digits = 2), " years"),
+              labelOptions = labelOptions(direction = 'auto', html = TRUE)) %>%
+  addLegend("bottomright", pal = colorQuantile(colorRamp(c("#d5f5dc", "#04801f"), interpolate = "spline"), df$life_exp, n = 5),
+            values = ~life_exp,
+            title = "Quartile",
+            opacity = 1) %>%
+  addPolygons(
+    data = dallas,
+    fillColor = "#333333",
+    fillOpacity = 0.1, weight = 2, color = "#333333",
+    smoothFactor = 1,
+    options = pathOptions(clickable = F, interactive = F)
+  ) %>%
+  setMaxBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+
+```
+
+## Heat Effect (2023)
+
+Source: ([Climate Central](https://www.climatecentral.org/climate-matters/urban-heat-islands-2023)
+
+```{r heat_effect_F}
+
+jittered_df <- df %>%
+  mutate(
+    heat_effect_F_jittered = jitter(heat_effect_F, amount = 0.0001)
+  )
+
+leaflet(data = jittered_df) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(fillColor = ~colorQuantile(colorRamp(c("#f0d3ce", "#a61903"), interpolate = "spline"), heat_effect_F_jittered, n = 5)(heat_effect_F_jittered),
+              fillOpacity = 0.7, weight = 1,
+              color = "white", dashArray = "3",
+              label = ~paste0("Heat effect: ", round(heat_effect_F, digits = 2), "°F"),
+              labelOptions = labelOptions(direction = 'auto', html = TRUE)
+              ) %>%
+  addLegend("bottomright", pal = colorQuantile(colorRamp(c("#f0d3ce", "#a61903"), interpolate = "spline"), jittered_df$heat_effect_F_jittered, n = 5),
+            values = ~heat_effect_F_jittered,
+            title = "Quartile",
+            opacity = 1) %>%
+  addPolygons(
+    data = dallas,
+    fillColor = "#333333",
+    fillOpacity = 0.1, weight = 2, color = "#333333",
+    smoothFactor = 1,
+    options = pathOptions(clickable = F, interactive = F)
+  ) %>%
+  setMaxBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+
+```
+
+## PM 2.5 (2018 Annual Average)
+
+```{r PM25}
+
+leaflet(data = df) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(fillColor = ~colorQuantile(colorRamp(c("#faf4de", "#7a6002"), interpolate = "spline"), PM25, n = 5)(PM25),
+              fillOpacity = 0.7, weight = 1,
+              color = "white", dashArray = "3",
+              label = ~paste("PM2.5 level:", round(PM25, digits = 3), "µg/m³"),
+              labelOptions = labelOptions(direction = 'auto', html = TRUE)
+  ) %>%
+  addLegend("bottomright", pal = colorQuantile(colorRamp(c("#faf4de", "#7a6002"), interpolate = "spline"), df$PM25, n = 5),
+            values = ~PM25,
+            title = "Quartile",
+            opacity = 1) %>%
+  addPolygons(
+    data = dallas,
+    fillColor = "#333333",
+    fillOpacity = 0.1, weight = 2, color = "#333333",
+    smoothFactor = 1,
+    options = pathOptions(clickable = F, interactive = F)
+  ) %>%
+  setMaxBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+
+```

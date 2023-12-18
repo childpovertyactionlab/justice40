@@ -1,0 +1,15 @@
+"0","leaflet(data = jittered_df) %>%
+  addProviderTiles(""CartoDB.Positron"") %>%
+  addPolygons(fillColor = ~colorQuantile(colorRamp(c(""#f0d3ce"", ""#a61903""), interpolate = ""spline""), heat_effect_F_jittered, n = 5)(heat_effect_F_jittered),
+              fillOpacity = 0.7, weight = 1,
+              color = ""white"", dashArray = ""3"",
+              label = ~paste0(""Heat effect: "", round(heat_effect_F, digits = 2), ""°F""),
+              labelOptions = labelOptions(direction = 'auto', html = TRUE)
+              ) %>%
+  addLegend(""bottomright"", pal = colorQuantile(colorRamp(c(""#f0d3ce"", ""#a61903""), interpolate = ""spline""), jittered_df$heat_effect_F_jittered, n = 5),
+            values = ~heat_effect_F_jittered,
+            title = ""Heat Island Effect"",
+            opacity = 1)
+"
+"2","Warning: sf layer has inconsistent datum (+proj=longlat +datum=NAD83 +no_defs).
+Need '+proj=longlat +datum=WGS84'"
