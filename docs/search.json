@@ -7,45 +7,45 @@
     "text": "Calculated by averaging quintile placement across all metrics. Higher score is worse."
   },
   {
-    "objectID": "index.html#severity-score",
-    "href": "index.html#severity-score",
+    "objectID": "index.html#overall-severity-score",
+    "href": "index.html#overall-severity-score",
     "title": "Justice40 in Dallas County",
     "section": "",
     "text": "Calculated by averaging quintile placement across all metrics. Higher score is worse."
   },
   {
-    "objectID": "index.html#poverty-rate-2018-2022",
-    "href": "index.html#poverty-rate-2018-2022",
+    "objectID": "index.html#poverty-rate",
+    "href": "index.html#poverty-rate",
     "title": "Justice40 in Dallas County",
-    "section": "Poverty Rate (2018-2022)",
-    "text": "Poverty Rate (2018-2022)"
+    "section": "Poverty Rate",
+    "text": "Poverty Rate\nSource: ACS 5-year estimate, 2018-2022"
   },
   {
-    "objectID": "index.html#child-poverty-rate-2018-2022",
-    "href": "index.html#child-poverty-rate-2018-2022",
+    "objectID": "index.html#child-poverty-rate",
+    "href": "index.html#child-poverty-rate",
     "title": "Justice40 in Dallas County",
-    "section": "Child Poverty Rate (2018-2022)",
-    "text": "Child Poverty Rate (2018-2022)"
+    "section": "Child Poverty Rate",
+    "text": "Child Poverty Rate\nSource: ACS 5-year estimate, 2018-2022"
   },
   {
-    "objectID": "index.html#life-expectancy-2010-2015",
-    "href": "index.html#life-expectancy-2010-2015",
+    "objectID": "index.html#life-expectancy",
+    "href": "index.html#life-expectancy",
     "title": "Justice40 in Dallas County",
-    "section": "Life Expectancy (2010-2015)",
-    "text": "Life Expectancy (2010-2015)"
+    "section": "Life Expectancy",
+    "text": "Life Expectancy\nSource: National Center for Health Statistics, 2010-2015"
   },
   {
-    "objectID": "index.html#heat-effect-2023",
-    "href": "index.html#heat-effect-2023",
+    "objectID": "index.html#urban-heat-island-effect",
+    "href": "index.html#urban-heat-island-effect",
     "title": "Justice40 in Dallas County",
-    "section": "Heat Effect (2023)",
-    "text": "Heat Effect (2023)\nSource: (Climate Central"
+    "section": "Urban Heat Island Effect",
+    "text": "Urban Heat Island Effect\nSource: Climate Central, 2023"
   },
   {
-    "objectID": "index.html#pm-2.5-2018-annual-average",
-    "href": "index.html#pm-2.5-2018-annual-average",
+    "objectID": "index.html#air-pollution-pm2.5",
+    "href": "index.html#air-pollution-pm2.5",
     "title": "Justice40 in Dallas County",
-    "section": "PM 2.5 (2018 Annual Average)",
-    "text": "PM 2.5 (2018 Annual Average)"
+    "section": "Air Pollution (PM2.5)",
+    "text": "Air Pollution (PM2.5)\nAnnual average in 2018 estimated with recording stations and satellite data.\nSource: Atmospheric Composition Analysis Group, 2018"
   }
 ]
